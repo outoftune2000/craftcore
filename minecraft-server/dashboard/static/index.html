@@ -5,24 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/icon.svg">
   <title>Minecraft Server Manager</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="arcade.css?v=15">
   <!-- Three.js for ambient dynamic background -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-  <nav style="position:fixed;right:18px;top:12px;z-index:1000"><a href="/setup">Installation settings</a> · <button onclick="craftLogout()">Sign out</button></nav>
-  <!-- Ambient Dynamic 3D Background Canvas -->
+<!-- Ambient Dynamic 3D Background Canvas -->
   <canvas id="three-bg-canvas" class="bg-canvas"></canvas>
 
   <div class="app-wrapper">
-    
+
     <!-- Top Navigation Bar -->
     <header class="navbar">
       <div class="brand">
-        <div class="brand-badge">⛏️</div>
+        <div class="brand-badge" aria-hidden="true">C</div>
         <div class="brand-info">
           <h1>CraftCore</h1>
           <span class="edition-pill">Vanilla</span>
@@ -40,7 +36,7 @@
           <span class="tunnel-text" id="nav-tunnel-text">Tunnel: Stopped</span>
         </div>
 
-        <div class="security-pill" id="nav-security-pill" onclick="switchToSecurityTab()" title="Click to view Security & Approvals">
+        <div class="security-pill" id="nav-security-pill" onclick="switchToSecurityTab()" title="Click to view Access">
           <span class="shield-dot">🛡️</span>
           <span class="security-text" id="nav-security-text">Gatekeeper: Active</span>
           <span class="pending-badge" id="nav-pending-badge" style="display: none">0</span>
@@ -48,13 +44,15 @@
       </div>
 
       <div class="nav-right">
-        <button class="theme-toggle" id="theme-toggle" title="Toggle Light / Dark Theme">
-          <span class="icon-sun">☀️</span>
-          <span class="icon-moon">🌙</span>
-        </button>
+<a class="account-link" href="/setup">Installation</a>
+        <button class="account-button" onclick="craftLogout()">Sign out</button>
       </div>
     </header>
 
+    <section class="page-heading" aria-labelledby="dashboard-title">
+      <div><span class="eyebrow">MINECRAFT JAVA / SERVER MANAGER</span><h2 id="dashboard-title">Control room</h2><p>Your world. All systems in view.</p></div>
+      <span class="page-meta">CRAFTCORE / 01</span>
+    </section>
     <!-- Real-Time Incoming Request Alert Banner -->
     <div class="security-alert-banner" id="security-alert-banner" style="display: none">
       <div class="alert-content">
@@ -72,12 +70,12 @@
 
     <!-- Quick Action & Connection Hero Banner -->
     <section class="hero-banner">
-      
+
       <!-- Primary Controls Card -->
       <div class="hero-card controls-card">
         <div class="hero-card-header">
           <span class="section-tag">SERVER CONTROLS</span>
-          <span class="port-label">PORT: <strong>25565</strong></span>
+          <span class="port-label">GAME PORT <strong id="game-port">25565</strong></span>
         </div>
         <div class="controls-btn-group">
           <button class="btn btn-start" id="btn-start" onclick="triggerAction('start')">
@@ -89,7 +87,7 @@
             Stop
           </button>
           <button class="btn btn-sleep" id="btn-sleep" onclick="triggerAction('sleep')" title="Flush world and put server to sleep (auto-wakes on login)">
-            <span>💤</span>
+
             Sleep
           </button>
           <button class="btn btn-restart" id="btn-restart" onclick="triggerAction('restart')">
@@ -97,7 +95,7 @@
             Restart
           </button>
           <button class="btn btn-tunnel" id="btn-tunnel" onclick="toggleTunnel()">
-            <span id="tunnel-btn-icon">⚡</span>
+            <span id="tunnel-btn-icon" aria-hidden="true"></span>
             <span id="tunnel-btn-text">Tunnel</span>
           </button>
         </div>
@@ -119,7 +117,7 @@
           </button>
         </div>
         <div class="address-footer">
-          <span>Friends join in the selected Minecraft version via Direct Connection. Protected with Dashboard Whitelist Approval.</span>
+          <span>Share this address with players. Join approvals are managed in Access.</span>
         </div>
       </div>
 
@@ -129,28 +127,28 @@
     <nav class="tab-nav">
       <button class="tab-item active" data-tab="tab-metrics">
         <span class="tab-icon">📊</span>
-        <span>Overview & Metrics</span>
+        <span>Overview</span>
       </button>
       <button class="tab-item" data-tab="tab-security">
         <span class="tab-icon">🛡️</span>
-        <span>Security & Approvals</span>
+        <span>Access</span>
         <span class="tab-badge" id="tab-security-badge" style="display: none">0</span>
       </button>
       <button class="tab-item" data-tab="tab-world">
         <span class="tab-icon">🗺️</span>
-        <span>World & Backups</span>
+        <span>World</span>
       </button>
       <button class="tab-item" data-tab="tab-map">
         <span class="tab-icon">🧭</span>
-        <span>Live Map</span>
+        <span>Map</span>
       </button>
       <button class="tab-item" data-tab="tab-console">
         <span class="tab-icon">💻</span>
-        <span>Live Console</span>
+        <span>Console</span>
       </button>
       <button class="tab-item" data-tab="tab-config">
         <span class="tab-icon">⚙️</span>
-        <span>Server Settings</span>
+        <span>Settings</span>
       </button>
       <button class="tab-item" data-tab="tab-players">
         <span class="tab-icon">👥</span>
@@ -160,11 +158,11 @@
 
     <!-- TAB CONTENTS -->
     <main class="tab-body">
-      
+
       <!-- TAB 1: OVERVIEW & TELEMETRY -->
       <div class="tab-pane active" id="tab-metrics">
         <div class="metrics-dashboard-grid">
-          
+
           <!-- CPU Card -->
           <div class="glass-card metric-box">
             <div class="metric-head">
@@ -185,7 +183,7 @@
             <div class="metric-head">
               <span class="metric-ico ram">💾</span>
               <div>
-                <h4>JVM Heap RAM</h4>
+                <h4>Server memory</h4>
                 <span class="metric-sub-label" id="val-sys-ram">System: 0/0 GB</span>
               </div>
             </div>
@@ -223,7 +221,11 @@
             </div>
           </div>
 
-          <!-- CPU Temperature Card -->
+
+
+        </div>
+
+        <details class="hardware-details"><summary>Hardware temperatures</summary><div class="metrics-dashboard-grid">          <!-- CPU Temperature Card -->
           <div class="glass-card metric-box">
             <div class="metric-head">
               <span class="metric-ico temp-cpu" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;">🔥</span>
@@ -251,24 +253,22 @@
             <div class="progress-bar-wrap">
               <div class="progress-fill temp-gpu-fill" id="bar-gpu-temp" style="width: 0%; background: linear-gradient(90deg, #06b6d4, #8b5cf6, #ec4899);"></div>
             </div>
-          </div>
+          </div></div></details>
 
-        </div>
-
-        <!-- Live Online Players Section -->
+        <!-- Online players Section -->
         <div class="glass-card live-players-card">
           <div class="card-title-row">
             <div>
-              <h3>👥 Live Online Players (<span id="online-players-count-text">0</span>)</h3>
-              <p class="card-subtitle">Real-time player telemetry: in-game health ❤️, hunger 🍗, and ping 🟢.</p>
+              <h3>Online players (<span id="online-players-count-text">0</span>)</h3>
+              <p class="card-subtitle">Connected players, health, and connection quality.</p>
             </div>
-            <span class="pulse-tag" id="online-pulse-tag"><span class="dot-green"></span> Live Telemetry</span>
+            <span class="pulse-tag" id="online-pulse-tag"><span class="dot-green"></span> LIVE</span>
           </div>
           <div class="live-players-grid" id="live-players-container">
             <div class="empty-players-box">
               <span class="empty-icon">🎮</span>
               <p>No players currently online on the server.</p>
-              <small>Connect to <code>Not configured</code> to view real-time stats here!</small>
+              <small>Player activity appears here after someone joins.</small>
             </div>
           </div>
         </div>
@@ -276,7 +276,7 @@
         <!-- Quick Summary & World Overview -->
         <div class="overview-secondary-grid">
           <div class="glass-card summary-card">
-            <h3>🎮 Server Quick Info</h3>
+            <h3>Server details</h3>
             <div class="summary-list">
               <div class="summary-row">
                 <span>Minecraft Edition</span>
@@ -302,7 +302,7 @@
           </div>
 
           <div class="glass-card summary-card">
-            <h3>🛡️ Access & Anti-Griefing Protection</h3>
+            <h3>Access protection</h3>
             <div class="summary-list">
               <div class="summary-row">
                 <span>Public Domain</span>
@@ -328,7 +328,7 @@
       <!-- TAB 2: SECURITY & APPROVALS (UPDATED FOR USERNAME WHITELIST & ADMIN PROTECTION) -->
       <div class="tab-pane" id="tab-security">
         <div class="security-manager-layout">
-          
+
           <!-- Admin Impersonation Protection Hero Card -->
           <div class="glass-card admin-guard-card">
             <div class="admin-guard-header">
@@ -354,7 +354,7 @@
           <div class="glass-card security-rules-bar">
             <div class="rules-header">
               <div>
-                <h3>⚙️ Join Approval & Security Rules</h3>
+                <h3>Join Approval & Security Rules</h3>
                 <p class="card-subtitle">Every new player requires your 1-click approval before they can join.</p>
               </div>
               <div class="rules-toggles-row">
@@ -394,7 +394,7 @@
           <div class="glass-card requests-panel">
             <div class="card-title-row">
               <div>
-                <h3>📡 Incoming Player Requests & Live Activity Log</h3>
+                <h3>Incoming Player Requests & Live Activity Log</h3>
                 <p class="card-subtitle">Real-time log of players attempting to connect. Approve or block with a single click.</p>
               </div>
               <button class="chip" onclick="loadSecurityData()">🔄 Refresh Logs</button>
@@ -422,10 +422,10 @@
 
           <!-- Approved & Blocked Lists Secondary Grid -->
           <div class="security-lists-grid">
-            
+
             <div class="glass-card sec-list-box">
               <div class="card-title-row">
-                <h4>✅ Approved Whitelisted Players</h4>
+                <h4>Approved Whitelisted Players</h4>
                 <span class="badge-status" id="approved-count-badge">0 Players</span>
               </div>
               <div class="sec-items-list" id="approved-users-list">
@@ -435,7 +435,7 @@
 
             <div class="glass-card sec-list-box">
               <div class="card-title-row">
-                <h4>🚫 Blocked / Rejected Players</h4>
+                <h4>Blocked / Rejected Players</h4>
                 <span class="badge-status red" id="blocked-count-badge">0 Players</span>
               </div>
               <div class="sec-items-list" id="blocked-users-list">
@@ -451,12 +451,12 @@
       <!-- TAB 3: WORLD & BACKUPS (UPLOAD / DOWNLOAD ZIP) -->
       <div class="tab-pane" id="tab-world">
         <div class="world-manager-grid">
-          
+
           <!-- Current World Status & Export Backup -->
           <div class="glass-card world-status-card">
             <div class="card-title-row">
               <div>
-                <h3>🌍 Active World</h3>
+                <h3>Active World</h3>
                 <p class="card-subtitle">Manage your current world save files and download backups.</p>
               </div>
               <span class="active-tag">Active Save</span>
@@ -483,7 +483,7 @@
 
             <div class="export-action-section">
               <div class="export-desc">
-                <h4>📦 Export World Backup (.zip)</h4>
+                <h4>Export World Backup (.zip)</h4>
                 <p>Generates a complete, uncompressed ZIP archive of your world data including player inventories, structures, and dimensions.</p>
               </div>
               <button class="btn btn-export" onclick="exportWorldBackup()">
@@ -497,7 +497,7 @@
           <div class="glass-card world-upload-card">
             <div class="card-title-row">
               <div>
-                <h3>📥 Import & Restore World (.zip)</h3>
+                <h3>Import & Restore World (.zip)</h3>
                 <p class="card-subtitle">Upload any single-player or server world ZIP archive to play with it.</p>
               </div>
             </div>
@@ -506,7 +506,7 @@
               <input type="file" id="world-file-input" accept=".zip" style="display: none" onchange="handleFileSelected(event)" />
               <div class="dropzone-inner">
                 <div class="drop-icon">📁</div>
-                <h4>Drag & Drop your <code>world.zip</code> here</h4>
+                <h4>Drag & Drop your <code>world.zip</code>here</h4>
                 <p>or click to browse your computer</p>
                 <span class="drop-hint">Accepts standard Minecraft Java world ZIPs (must contain level.dat)</span>
               </div>
@@ -571,7 +571,7 @@
       <!-- TAB 4: LIVE WEB MAP & PLAYER TRACKER -->
       <div class="tab-pane" id="tab-map">
         <div class="map-layout-grid">
-          
+
           <!-- Map Canvas & Viewport Card -->
           <div class="glass-card map-card">
             <!-- Map Top HUD Bar -->
@@ -600,7 +600,7 @@
                   </div>
                 </div>
               </div>
-              
+
               <div class="map-hud-right">
                 <div class="map-controls-group">
                   <button class="map-ctrl-btn" onclick="zoomMap(1.3)" title="Zoom In">🔍+</button>
@@ -615,7 +615,7 @@
             <!-- Interactive Map Viewport -->
             <div class="map-viewport-wrapper" id="map-viewport">
               <canvas id="minecraft-map-canvas" class="minecraft-map-canvas"></canvas>
-              
+
               <!-- Floating Coords & Zoom Info HUD -->
               <div class="map-coords-hud">
                 <span id="map-cursor-coords">📍 X: 0, Z: 0</span>
@@ -627,12 +627,12 @@
 
           <!-- Map Sidebar: Players & Waypoints -->
           <div class="map-sidebar">
-            
+
             <!-- Tracked Players Card -->
             <div class="glass-card map-side-card">
               <div class="card-title-row">
                 <div>
-                  <h3>👥 Tracked Players</h3>
+                  <h3>Tracked Players</h3>
                   <p class="card-subtitle">Click to jump map to player position</p>
                 </div>
                 <span class="active-tag" id="map-players-count">0 Players</span>
@@ -646,7 +646,7 @@
             <div class="glass-card map-side-card">
               <div class="card-title-row">
                 <div>
-                  <h3>📍 Waypoints</h3>
+                  <h3>Waypoints</h3>
                   <p class="card-subtitle">Bases, portals & farms</p>
                 </div>
                 <button class="btn btn-sm btn-primary" style="padding: 4px 10px; font-size: 0.75rem; background: var(--indigo); border-color: var(--indigo);" onclick="showAddWaypointModal()">+ Add Pin</button>
@@ -696,7 +696,7 @@
         <div class="glass-card config-layout">
           <div class="config-top-bar">
             <div>
-              <h3>⚙️ Server Configuration</h3>
+              <h3>Server Configuration</h3>
               <p class="card-subtitle">Manage gameplay rules, difficulty, and player limits (`server.properties`).</p>
             </div>
             <button class="btn btn-save" onclick="saveConfiguration()">
@@ -705,7 +705,7 @@
           </div>
 
           <div class="config-form-grid">
-            
+
             <div class="config-group full-col">
               <label>Server MOTD (Title)</label>
               <input type="text" id="cfg-motd" class="form-ctrl" placeholder="Minecraft Server" />
@@ -830,29 +830,29 @@
         <div class="glass-card live-players-card" style="margin-bottom: 20px;">
           <div class="card-title-row">
             <div>
-              <h3>👥 Live Online Players (<span id="online-players-count-text-2">0</span>)</h3>
-              <p class="card-subtitle">Real-time player telemetry: in-game health ❤️, hunger 🍗, and ping 🟢.</p>
+              <h3>Online players (<span id="online-players-count-text-2">0</span>)</h3>
+              <p class="card-subtitle">Connected players, health, and connection quality.</p>
             </div>
-            <span class="pulse-tag"><span class="dot-green"></span> Live Telemetry</span>
+            <span class="pulse-tag"><span class="dot-green"></span> LIVE</span>
           </div>
           <div class="live-players-grid" id="live-players-container-2">
             <div class="empty-players-box">
               <span class="empty-icon">🎮</span>
               <p>No players currently online on the server.</p>
-              <small>Connect to <code>Not configured</code> to view real-time stats here!</small>
+              <small>Player activity appears here after someone joins.</small>
             </div>
           </div>
         </div>
 
         <div class="players-layout-grid">
-          
+
           <!-- Operators -->
           <div class="glass-card player-panel">
             <div class="player-panel-head">
-              <h3>🛡️ Server Operators (Admins)</h3>
+              <h3>Server Operators (Admins)</h3>
               <p>Admins with full in-game command permissions.</p>
             </div>
-            
+
             <div class="player-add-row">
               <input type="text" id="input-op-name" class="form-ctrl" placeholder="Minecraft username..." />
               <button class="btn btn-add" onclick="addOperator()">+ Add OP</button>
@@ -866,7 +866,7 @@
           <!-- Whitelist -->
           <div class="glass-card player-panel">
             <div class="player-panel-head">
-              <h3>📋 Whitelisted Players</h3>
+              <h3>Whitelisted Players</h3>
               <p>Players permitted to connect when whitelist is turned on.</p>
             </div>
 
@@ -884,7 +884,7 @@
           <div class="glass-card player-panel" style="grid-column: 1 / -1; margin-top: 14px;">
             <div class="player-panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
               <div>
-                <h3>🎒 Registered Players & Inventories (<span id="all-players-count">0</span>)</h3>
+                <h3>Registered Players & Inventories (<span id="all-players-count">0</span>)</h3>
                 <p>Inspect any player's live inventory, equipped armor, XP levels, and Ender Chest contents.</p>
               </div>
               <button class="chip" onclick="loadPlayersData()">🔄 Refresh Players</button>
@@ -973,7 +973,7 @@
     <div class="inv-modal-backdrop" id="waypoint-modal" style="display: none;" onclick="closeWaypointModal(event)">
       <div class="glass-card inv-modal-container" style="max-width: 440px;" onclick="event.stopPropagation()">
         <div class="inv-modal-header">
-          <h3>📍 Add Custom Waypoint</h3>
+          <h3>Add Custom Waypoint</h3>
           <button class="inv-modal-close" onclick="closeWaypointModal()">✕</button>
         </div>
         <form class="inv-modal-body" onsubmit="saveCustomWaypoint(event)">
@@ -1029,6 +1029,8 @@
       </div>
     </div>
 
+    <footer class="app-footer"><span>CRAFTCORE / VANILLA SERVER CONTROL</span><span>Private access · Live telemetry · Your world</span></footer>
+
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-stack"></div>
 
@@ -1037,7 +1039,7 @@
   <script src="session.js"></script>
   <script src="vendor/purify.min.js"></script>
   <script src="safe-html.js"></script>
-  <script src="three-scene.js?v=14"></script>
-  <script src="app.js?v=14"></script>
+
+  <script src="app.js?v=15"></script>
 </body>
 </html>

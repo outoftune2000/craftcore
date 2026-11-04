@@ -74,17 +74,7 @@ function playAlertTone() {
 
 // Theme Management
 function initTheme() {
-  const themeToggle = document.getElementById('theme-toggle');
-  const savedTheme = localStorage.getItem('craftcore-theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', savedTheme);
-
-  themeToggle.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    const next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('craftcore-theme', next);
-    showToast(`Switched to ${next} theme`, 'info');
-  });
+  document.documentElement.setAttribute('data-theme', 'dark');
 }
 
 // Tab Switching
@@ -147,6 +137,8 @@ function initWebSocket() {
 
 // Update Telemetry & Status Badges
 function updateMetricsUI(data) {
+  const portLabel=document.getElementById("game-port");
+  if(portLabel)portLabel.textContent=data.port || "—";
   const installedVersion=document.getElementById("installed-version");
   if(installedVersion)installedVersion.textContent=data.version || "Not configured";
   currentServerRunning = data.server_running;
@@ -295,7 +287,7 @@ function renderOnlinePlayers(players) {
         <div class="empty-players-box">
           <span class="empty-icon">🎮</span>
           <p>No players currently online on the server.</p>
-          <small>Connect to <code>Not configured</code> to view real-time stats here!</small>
+          <small>Player activity appears here after someone joins.</small>
         </div>
       `;
     });
@@ -1789,9 +1781,9 @@ function drawMap() {
   } else {
     // Overworld - becomes deeper navy / dark cave tint when layer is reduced underground
     if (mapState.maxLayerY < 64) {
-      ctx.fillStyle = '#040711';
+      ctx.fillStyle = '#050505';
     } else {
-      ctx.fillStyle = '#070d1e';
+      ctx.fillStyle = '#050505';
     }
   }
   ctx.fillRect(0, 0, w, h);
@@ -1931,7 +1923,7 @@ function drawMap() {
     ctx.textAlign = 'center';
     ctx.fillText('🏠', spawnCX, spawnCY + 7);
     ctx.font = '10px Inter, sans-serif';
-    ctx.fillStyle = '#818cf8';
+    ctx.fillStyle = '#ffcc00';
     ctx.fillText('World Spawn (0, 0)', spawnCX, spawnCY + 22);
     ctx.restore();
   }
@@ -1953,7 +1945,7 @@ function drawMap() {
 
         ctx.beginPath();
         ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-        ctx.fillStyle = wp.color || '#6366f1';
+        ctx.fillStyle = wp.color || '#ffcc00';
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
@@ -1964,7 +1956,7 @@ function drawMap() {
         ctx.fillText(wp.icon || '📍', cx, cy - 10);
 
         ctx.font = 'bold 11px Inter, sans-serif';
-        ctx.fillStyle = inLayer ? '#f8fafc' : '#94a3b8';
+        ctx.fillStyle = inLayer ? '#fff7d6' : '#b9a85d';
         ctx.fillText(inLayer ? wp.name : `${wp.name} (Y=${wpY})`, cx, cy + 18);
         ctx.restore();
       }
@@ -1992,7 +1984,7 @@ function drawMap() {
         ctx.arc(px, py, inLayer ? 15 : 11, 0, Math.PI * 2);
         ctx.fillStyle = p.is_online ? 'rgba(34, 197, 94, 0.25)' : 'rgba(99, 102, 241, 0.2)';
         ctx.fill();
-        ctx.strokeStyle = p.is_online ? '#22c55e' : '#6366f1';
+        ctx.strokeStyle = p.is_online ? '#22c55e' : '#ffcc00';
         ctx.lineWidth = inLayer ? 2 : 1;
         ctx.stroke();
 
@@ -2023,12 +2015,12 @@ function drawMap() {
         ctx.lineWidth = 1;
         ctx.strokeRect(px - textWidth / 2 - 6, py - 28, textWidth + 12, 16);
 
-        ctx.fillStyle = inLayer ? (p.is_online ? '#4ade80' : '#f8fafc') : '#94a3b8';
+        ctx.fillStyle = inLayer ? (p.is_online ? '#4ade80' : '#fff7d6') : '#b9a85d';
         ctx.fillText(labelText, px, py - 16);
 
         // Altitude & health badge
         ctx.font = '9px JetBrains Mono';
-        ctx.fillStyle = inLayer ? '#94a3b8' : '#64748b';
+        ctx.fillStyle = inLayer ? '#b9a85d' : '#64748b';
         ctx.fillText(`Y=${p.pos.y} • ❤️${p.health}`, px, py + 22);
 
         ctx.restore();

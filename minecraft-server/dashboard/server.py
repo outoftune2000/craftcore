@@ -1797,7 +1797,7 @@ class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
         if path in ('/login', '/setup'):
             self.path_args = ['setup.html']
             return
-        if path in ('/setup.html', '/setup.js', '/setup.css', '/session.js'):
+        if path in ('/setup.html', '/setup.js', '/setup.css', '/session.js', '/arcade.css', '/fonts/inter.woff2', '/fonts/pixel.woff2'):
             return
         if not session(self):
             self.redirect('/login'); return
