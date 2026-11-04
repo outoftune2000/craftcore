@@ -101,6 +101,7 @@ document.addEventListener('change',()=>{if(auth?.authenticated&&currentStep>1)pe
   if(!auth.authenticated) {
     show('access',1);$('token-label').hidden=auth.admin_exists;
     if(auth.admin_exists)$('steps').hidden=true;
+    if($('registration-link'))$('registration-link').hidden=!auth.registration_open;
     $('access-title').textContent=auth.admin_exists?'Welcome back':'Secure your dashboard';
     if($('login-username-label'))$('login-username-label').textContent=auth.admin_exists?'Dashboard username':'Administrator name';
     if(auth.admin_exists&&$('auth-intro'))$('auth-intro').textContent='Sign in with your administrator or player dashboard account.';

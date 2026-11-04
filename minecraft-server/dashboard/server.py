@@ -23,7 +23,7 @@ import tornado.ioloop
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from installation import settings, operation_lock
 from dashboard.access import (ProtectedHandler, session, same_origin, bootstrap_token,
-    AuthStatusHandler, LoginHandler, LogoutHandler, AdminHandler, ActivateHandler)
+    AuthStatusHandler, LoginHandler, LogoutHandler, AdminHandler, ActivateHandler, RegisterHandler)
 from dashboard.setup_api import routes as setup_routes
 from dashboard import access as account_access
 from dashboard.roles import metrics_for, map_for
@@ -1117,7 +1117,7 @@ class MeHandler(ProtectedHandler):
 
 class AccountsHandler(ProtectedHandler):
     async def get(self):
-        self.write({'accounts':account_access.list_player_accounts(),
+        self.write({'accounts':account_access.list_player_accounts(),'registrations':account_access.list_registrations(),
                     'players':await asyncio.to_thread(known_dashboard_players)})
 
     async def post(self):
@@ -1129,11 +1129,21 @@ class AccountsHandler(ProtectedHandler):
                 player=next((p for p in players if p['uuid']==data.get('player_uuid')),None)
                 if not player: raise ValueError('Select a player who has joined and has saved player data')
                 result=await asyncio.to_thread(account_access.create_player_account,data.get('username'),player['uuid'],player['name'])
+            elif data.get('action')=='approve':
+                players=await asyncio.to_thread(known_dashboard_players)
+                player=next((p for p in players if p['uuid']==data.get('player_uuid')),None)
+                if not player: raise ValueError('Select the verified saved Minecraft player before approving')
+                account_id=await asyncio.to_thread(account_access.approve_registration,data.get('id'),player['uuid'],player['name'])
+                result={'id':account_id,'approved':True}
+            elif data.get('action')=='reject':
+                await asyncio.to_thread(account_access.reject_registration,data.get('id'))
+                result={'rejected':True}
             elif data.get('action')=='reset':
                 result=await asyncio.to_thread(account_access.reset_player_account,data.get('id'))
             else: raise ValueError('Unknown account action')
             self.write({'success':True,**result})
-        except (ValueError,TypeError) as exc: raise tornado.web.HTTPError(400,str(exc))
+        except (ValueError,TypeError) as exc:
+            self.set_status(400);self.write({'error':str(exc)})
 
     async def delete(self):
         try:
@@ -1141,7 +1151,8 @@ class AccountsHandler(ProtectedHandler):
             if not isinstance(data,dict): raise ValueError('Expected an object')
             await asyncio.to_thread(account_access.delete_player_account,data.get('id'))
             self.write({'success':True})
-        except (ValueError,TypeError) as exc: raise tornado.web.HTTPError(400,str(exc))
+        except (ValueError,TypeError) as exc:
+            self.set_status(400);self.write({'error':str(exc)})
 
 class PlayersHandler(ProtectedHandler):
     def get(self):
@@ -1887,13 +1898,15 @@ class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
     def prepare(self):
         self.xsrf_token
         path = self.request.path
+        if path == '/register':
+            self.path_args = ['register.html']; return
         if path == '/join':
             self.path_args = ['join.html']; return
         if path in ('/login', '/setup'):
             if session(self) and session(self)['role']=='player': self.redirect('/'); return
             self.path_args = ['setup.html']
             return
-        if path in ('/setup.html', '/setup.js', '/setup.css', '/session.js', '/join.html', '/join.js', '/arcade.css', '/fonts/inter.woff2', '/fonts/pixel.woff2'):
+        if path in ('/setup.html', '/setup.js', '/setup.css', '/session.js', '/join.html', '/join.js', '/register.html', '/register.js', '/arcade.css', '/fonts/inter.woff2', '/fonts/pixel.woff2'):
             return
         if not session(self):
             self.redirect('/login'); return
@@ -1915,6 +1928,7 @@ def make_app():
         (r"/api/auth/login", LoginHandler),
         (r"/api/auth/logout", LogoutHandler),
         (r"/api/auth/activate", ActivateHandler),
+        (r"/api/auth/register", RegisterHandler),
         (r"/api/me", MeHandler),
         (r"/api/accounts", AccountsHandler),
         (r"/api/setup/admin", AdminHandler),

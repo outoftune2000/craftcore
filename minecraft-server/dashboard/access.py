@@ -18,6 +18,7 @@ from dashboard.roles import PLAYER_READ_PATHS
 AUTH_LOCK = threading.Lock()
 SESSIONS = {}
 ATTEMPTS = {}
+REGISTRATION_ATTEMPTS = {}
 SESSION_SECONDS = 8 * 3600
 INVITE_SECONDS = 48 * 3600
 
@@ -31,7 +32,60 @@ def credential_lock():
         finally: fcntl.flock(stream, fcntl.LOCK_UN)
 
 def player_store():
-    return read_json(STATE / 'players.json', {'accounts': {}})
+    store=read_json(STATE / 'players.json', {'accounts': {}})
+    store.setdefault('requests',{})
+    return store
+
+def list_registrations():
+    return [dict(id=key, **{field:value.get(field) for field in ('username','minecraft_name','created_at')})
+            for key,value in player_store()['requests'].items()]
+
+def request_player_account(username, minecraft_name, password):
+    if not isinstance(username,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{3,32}',username):
+        raise ValueError('Dashboard username must be 3–32 letters, numbers, dots, underscores, or hyphens')
+    if not isinstance(minecraft_name,str) or not re.fullmatch(r'[A-Za-z0-9_]{1,16}',minecraft_name):
+        raise ValueError('Enter a valid Minecraft username (1–16 letters, numbers, or underscores)')
+    if not isinstance(password,str) or not 12<=len(password)<=256:
+        raise ValueError('Use a password of 12–256 characters')
+    with credential_lock():
+        admin=read_json(STATE/'admin.json')
+        if not admin or not settings()['complete']:
+            raise ValueError('Player registration opens after the administrator completes server setup')
+        store=player_store()
+        names=[admin['username'].casefold()]+[v['username'].casefold() for v in store['accounts'].values()]+[v['username'].casefold() for v in store['requests'].values()]
+        if username.casefold() in names: raise ValueError('That dashboard username is already in use or awaiting approval')
+        if len(store['requests'])>=100: raise ValueError('The approval queue is full. Contact the administrator.')
+        request_id=secrets.token_hex(16)
+        store['requests'][request_id]={'username':username,'minecraft_name':minecraft_name,
+            'created_at':time.time(),**hash_password(password)}
+        write_json(STATE/'players.json',store)
+    return request_id
+
+def approve_registration(request_id, player_uuid, minecraft_name):
+    player_uuid=str(uuid.UUID(player_uuid))
+    with credential_lock():
+        store=player_store();request=store['requests'].get(request_id)
+        if not request: raise ValueError('This request has already been handled or does not exist')
+        admin=read_json(STATE/'admin.json')
+        if request['username'].casefold()==admin.get('username','').casefold() or any(a['username'].casefold()==request['username'].casefold() for a in store['accounts'].values()):
+            raise ValueError('The requested dashboard username is no longer available')
+        if any(a['player_uuid']==player_uuid for a in store['accounts'].values()):
+            raise ValueError('This Minecraft player already has dashboard access')
+        account_id=secrets.token_hex(16)
+        store['accounts'][account_id]={
+            'username':request['username'],'player_uuid':player_uuid,'minecraft_name':minecraft_name,
+            'created_at':time.time(),'credential_version':secrets.token_hex(16),
+            'salt':request['salt'],'hash':request['hash']}
+        del store['requests'][request_id]
+        write_json(STATE/'players.json',store)
+        return account_id
+
+def reject_registration(request_id):
+    with credential_lock():
+        store=player_store()
+        if request_id not in store['requests']: raise ValueError('This request has already been handled or does not exist')
+        del store['requests'][request_id]
+        write_json(STATE/'players.json',store)
 
 def identity_for(account_id, account):
     return {key:account[key] for key in ('username','player_uuid','minecraft_name') if key in account} | {
@@ -56,6 +110,7 @@ def create_player_account(username, player_uuid, minecraft_name):
     with credential_lock():
         store = player_store()
         names = [v['username'].casefold() for v in store['accounts'].values()]
+        names.extend(v['username'].casefold() for v in store['requests'].values())
         names.append(read_json(STATE/'admin.json').get('username','').casefold())
         if username.casefold() in names: raise ValueError('That dashboard login name is already in use')
         if any(v['player_uuid']==player_uuid for v in store['accounts'].values()):
@@ -200,13 +255,28 @@ class AuthStatusHandler(PublicHandler):
     def get(self):
         identity=session(self)
         self.write({'admin_exists': (STATE / 'admin.json').exists(), 'authenticated': bool(session(self)),
-                    'complete': settings()['complete'],'user':public_identity(identity) if identity else None})
+                    'complete': settings()['complete'],'registration_open':(STATE/'admin.json').exists() and settings()['complete'],'user':public_identity(identity) if identity else None})
 
 def throttle(handler):
     key = handler.request.remote_ip
     recent = [stamp for stamp in ATTEMPTS.get(key, []) if stamp > time.time() - 300]
     if len(recent) >= 10: raise tornado.web.HTTPError(429, 'Too many attempts; retry in five minutes')
     ATTEMPTS[key] = recent + [time.time()]
+
+class RegisterHandler(PublicHandler):
+    async def post(self):
+        key=self.request.remote_ip;now=time.time()
+        recent=[t for t in REGISTRATION_ATTEMPTS.get(key,[]) if t>now-3600]
+        if len(recent)>=3:
+            self.set_status(429);self.write({'error':'Too many registration attempts. Retry in one hour or contact the administrator.'});return
+        REGISTRATION_ATTEMPTS[key]=recent+[now]
+        data=self.body_json()
+        try:
+            await asyncio.to_thread(request_player_account,data.get('username'),data.get('minecraft_name'),data.get('password'))
+        except ValueError as exc:
+            self.set_status(400);self.write({'error':str(exc)});return
+        self.set_status(202)
+        self.write({'success':True,'status':'pending','message':'Request submitted. An administrator must approve your player account before you can sign in.'})
 
 class LoginHandler(PublicHandler):
     async def post(self):
