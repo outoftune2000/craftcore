@@ -2171,8 +2171,3 @@ async function deleteCustomWaypoint(id) {
     showToast('Failed to delete waypoint', 'error');
   }
 }
-
-// Refresh saved terrain revisions and overlays while the map is visible.
-setInterval(() => {
-  if (document.getElementById('tab-map')?.classList.contains('active')) loadMapData();
-}, 15000);

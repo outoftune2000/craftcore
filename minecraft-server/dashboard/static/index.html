@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css?v=15">
   <link rel="stylesheet" href="arcade.css?v=15">
   <link rel="stylesheet" href="pixel-meters.css?v=16">
+  <link rel="stylesheet" href="world-map.css?v=17">
   <!-- Three.js for ambient dynamic background -->
 </head>
 <body>
@@ -571,59 +572,46 @@
 
       <!-- TAB 4: LIVE WEB MAP & PLAYER TRACKER -->
       <div class="tab-pane" id="tab-map">
+        <div class="map-intro"><div><h3>World explorer</h3><p>Saved terrain, raised into view. Explore your builds from a new angle.</p></div><div class="terrain-navigation"><button class="map-ctrl-btn" onclick="toggleTerrainFullscreen()">Expand</button><button class="map-ctrl-btn" onclick="refreshTerrain()">Refresh</button></div></div>
         <div class="map-layout-grid">
 
           <!-- Map Canvas & Viewport Card -->
           <div class="glass-card map-card">
-            <!-- Map Top HUD Bar -->
-            <div class="map-hud-bar">
-              <div class="map-hud-left">
-                <div class="map-dim-selector">
-                  <button class="map-dim-btn active" data-dim="overworld" onclick="setMapDimension('overworld')">🌲 Overworld</button>
-                  <button class="map-dim-btn" data-dim="the_nether" onclick="setMapDimension('the_nether')">🔥 The Nether</button>
-                  <button class="map-dim-btn" data-dim="the_end" onclick="setMapDimension('the_end')">🌌 The End</button>
-                </div>
-
-                <!-- Layer Height (Y-Level) Slicer HUD -->
-                <div class="map-layer-slicer" title="Adjust the maximum layer height / Y-elevation cut to view underground caves or surface layers">
-                  <div class="layer-label-row">
-                    <span class="layer-title">📶 Layer Height:</span>
-                    <strong class="layer-val" id="map-layer-display">Y ≤ 320 (All / Surface)</strong>
-                  </div>
-                  <div class="layer-slider-wrap">
-                    <input type="range" id="map-layer-slider" min="-64" max="320" value="320" step="1" oninput="handleMapLayerChange(this.value)" />
-                    <div class="layer-presets">
-                      <button class="btn-preset active" data-y="320" onclick="setMapLayerPreset(320)" title="All heights / Surface">🏔️ All (320)</button>
-                      <button class="btn-preset" data-y="64" onclick="setMapLayerPreset(64)" title="Sea level">🌊 Sea (64)</button>
-                      <button class="btn-preset" data-y="16" onclick="setMapLayerPreset(16)" title="Caves & Mines">⛏️ Caves (16)</button>
-                      <button class="btn-preset" data-y="-32" onclick="setMapLayerPreset(-32)" title="Deepslate & Diamonds">🕳️ Deep (-32)</button>
-                    </div>
-                  </div>
-                </div>
+            <div class="terrain-toolbar">
+              <div class="terrain-dimensions" aria-label="Dimension">
+                <button class="map-dim-btn active" data-dim="overworld" onclick="setMapDimension('overworld')">Overworld</button>
+                <button class="map-dim-btn" data-dim="the_nether" onclick="setMapDimension('the_nether')">Nether</button>
+                <button class="map-dim-btn" data-dim="the_end" onclick="setMapDimension('the_end')">The End</button>
               </div>
-
-              <div class="map-hud-right">
-                <div class="map-controls-group">
-                  <button class="map-ctrl-btn" onclick="zoomMap(1.3)" title="Zoom In">🔍+</button>
-                  <button class="map-ctrl-btn" onclick="zoomMap(0.7)" title="Zoom Out">🔍−</button>
-                  <button class="map-ctrl-btn" onclick="resetMapCenter()" title="Recenter to Spawn (0, 0)">🏠 Spawn</button>
-                  <button class="map-ctrl-btn" onclick="toggleMapGrid()" id="btn-toggle-grid" title="Toggle Coordinate Grid">📐 Grid</button>
-                  <button class="map-ctrl-btn" onclick="loadMapData()" title="Refresh Map Data">🔄</button>
-                </div>
+              <div class="terrain-views" aria-label="Map projection">
+                <button class="map-view-btn" id="map-view-angled" aria-pressed="true" onclick="setTerrainMode('angled')">Angled</button>
+                <button class="map-view-btn" id="map-view-flat" aria-pressed="false" onclick="setTerrainMode('flat')">Top-down</button>
               </div>
             </div>
-
+            <div class="terrain-options">
+              <div class="terrain-height"><label for="map-layer-slider">Height cutoff</label><strong id="map-layer-display">Y ≤ 320</strong>
+                <input type="range" id="map-layer-slider" min="-64" max="320" value="320" step="1" oninput="handleMapLayerChange(this.value)">
+                <div class="layer-presets"><button class="btn-preset active" data-y="320" onclick="setMapLayerPreset(320)">Surface</button><button class="btn-preset" data-y="64" onclick="setMapLayerPreset(64)">64</button><button class="btn-preset" data-y="16" onclick="setMapLayerPreset(16)">16</button><button class="btn-preset" data-y="-32" onclick="setMapLayerPreset(-32)">−32</button></div>
+              </div>
+              <div class="terrain-navigation" aria-label="Map navigation">
+                <button class="map-ctrl-btn" onclick="zoomMap(1.3)" aria-label="Zoom in">+</button><button class="map-ctrl-btn" onclick="zoomMap(1/1.3)" aria-label="Zoom out">−</button>
+                <button class="map-ctrl-btn" onclick="rotateTerrain(-1)" aria-label="Rotate left">↶</button><button class="map-ctrl-btn" onclick="rotateTerrain(1)" aria-label="Rotate right">↷</button>
+                <button class="map-ctrl-btn" onclick="resetMapCenter()" title="Go to the saved world spawn">Spawn</button><button class="map-ctrl-btn map-fullscreen-exit" onclick="toggleTerrainFullscreen()">Exit full screen</button><button class="map-ctrl-btn" id="map-grid-toggle" aria-pressed="false" onclick="toggleMapGrid()">Grid</button>
+              </div>
+            </div>
             <!-- Interactive Map Viewport -->
             <div class="map-viewport-wrapper" id="map-viewport">
-              <canvas id="minecraft-map-canvas" class="minecraft-map-canvas"></canvas>
+              <canvas id="minecraft-map-canvas" class="minecraft-map-canvas" tabindex="0" aria-label="World terrain map. Drag or use arrow keys to pan. Scroll, pinch, or use plus and minus to zoom. Press zero to return to spawn."></canvas>
+              <span class="terrain-compass" id="map-orientation" aria-label="North direction">N ↗</span>
 
               <!-- Floating Coords & Zoom Info HUD -->
               <div class="map-coords-hud">
-                <span id="map-cursor-coords">📍 X: 0, Z: 0</span>
+                <span id="map-cursor-coords">Hover terrain for coordinates</span>
                 <span class="hud-sep">•</span>
-                <span id="map-zoom-level">Zoom: 1.0x</span>
+                <span id="map-zoom-level">1.20×</span>
               </div>
             </div>
+            <div class="terrain-footer"><span id="terrain-status" role="status">Open the map to load saved terrain</span><span id="map-saved-at">Saved world data</span></div>
           </div>
 
           <!-- Map Sidebar: Players & Waypoints -->
@@ -634,7 +622,7 @@
               <div class="card-title-row">
                 <div>
                   <h3>Tracked Players</h3>
-                  <p class="card-subtitle">Click to jump map to player position</p>
+                  <p class="card-subtitle">Jump to the last saved position</p>
                 </div>
                 <span class="active-tag" id="map-players-count">0 Players</span>
               </div>
@@ -660,6 +648,7 @@
           </div>
 
         </div>
+        <p class="terrain-note">Drag to pan · Scroll or pinch to zoom · Arrow keys to move. Terrain and player positions reflect saved world data; checked every 15 seconds. Angled relief samples surface heights, rather than full block geometry.</p>
       </div>
 
       <!-- TAB 5: LIVE CONSOLE -->
@@ -1043,5 +1032,6 @@
 
   <script src="app.js?v=15"></script>
   <script src="pixel-meters.js?v=16"></script>
+  <script src="world-map.js?v=17"></script>
 </body>
 </html>

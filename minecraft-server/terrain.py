@@ -14,7 +14,7 @@ def state_index(data, index, bits, padded=True):
         value |= (data[word + 1] & ((1 << 64) - 1)) << (64 - shift)
     return value & mask
 
-def surface(chunk, max_y):
+def surface(chunk, max_y, stride=1, sample_offset=0):
     """Yield actual visible (x,z,height,block) columns, supporting old/new Anvil layouts."""
     version = chunk.get('DataVersion', 0)
     chunk = chunk.get('Level', chunk)
@@ -27,10 +27,10 @@ def surface(chunk, max_y):
         states = section.get('block_states', {})
         palette = states.get('palette', section.get('Palette', []))
         data = states.get('data', section.get('BlockStates', []))
-        if not palette: continue
+        if not palette or all(p.get('Name', 'minecraft:air') in AIR for p in palette): continue
         bits = max(4, (len(palette) - 1).bit_length())
-        for z in range(16):
-            for x in range(16):
+        for z in range(sample_offset, 16, stride):
+            for x in range(sample_offset, 16, stride):
                 if (x,z) in result: continue
                 for y in range(min(15, max_y - sy), -1, -1):
                     index = y * 256 + z * 16 + x

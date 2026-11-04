@@ -48,3 +48,13 @@ python3 -m unittest discover -s tests -v
 ```
 
 Publication must use a new repository made from the reviewed source snapshot, never the original deployment's history. No GitHub upload is performed by setup. The dashboard is intended for a trusted host account and SSH-forwarded access; do not expose its HTTP port to the public internet.
+
+## World explorer
+
+The map opens at the spawn coordinates saved in level.dat and offers angled surface relief, top-down viewing, quarter-turn rotation, a height cutoff, fullscreen, saved player markers, and waypoints. Drag or use arrow keys to pan; scroll, pinch, or use + / - to zoom. Press 0 or use Spawn to recenter. Camera preferences are saved in the browser. Nether starts below the bedrock roof at Y=120. Empty dimensions show an empty state.
+
+This is sampled height relief, not full block models, textures, transparent interiors, or a live connection to game memory. Terrain and player positions follow world saves, with metadata checked every 15 seconds. Detail adapts from 32 to 2 blocks per sample as you zoom in. Hover coordinates are approximate to the sample footprint.
+
+The authenticated GET /api/map/terrain endpoint accepts dim (overworld, the_nether/nether, the_end/end), rx, rz, step (2/4/8/16/32), and layer (-64 through 512). It returns a row-major square heights array and matching packed 24-bit RGB colors; -32768 denotes missing terrain. The payload includes size, step, region coordinates, revision, and readable/skipped chunk counts. Revisions follow region modification timestamps. Partial or concurrently saved reads are not cached. Up to 256 derived terrain tiles are kept in private .state/map-cache, outside world backups. Work is bounded to two terrain workers and runs off the HTTP loop.
+
+The original PNG tile endpoint remains available. /api/map/data retains its existing response; terrain_only=1 skips decoding in-game map-item images when the new terrain viewer does not need them.

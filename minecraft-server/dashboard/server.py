@@ -25,6 +25,7 @@ from dashboard.access import (ProtectedHandler, session, same_origin, bootstrap_
     AuthStatusHandler, LoginHandler, LogoutHandler, AdminHandler)
 from dashboard.setup_api import routes as setup_routes
 from terrain import surface
+from map_terrain import dimension as map_dimension, mesh_tile, read_spawn
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -1113,7 +1114,7 @@ class PlayersHandler(ProtectedHandler):
                 
         self.write({"ops": ops, "whitelist": whitelist, "all_players": all_players})
 
-def get_map_telemetry_data():
+def get_map_telemetry_data(include_tiles=True):
     players_data = []
     usercache = {}
     if os.path.exists(USERCACHE_FILE):
@@ -1155,7 +1156,7 @@ def get_map_telemetry_data():
 
     maps_dir = os.path.join(WORLD_DIR, "data", "minecraft", "maps")
     tiles = []
-    if os.path.exists(maps_dir):
+    if include_tiles and os.path.exists(maps_dir):
         for f in os.listdir(maps_dir):
             if f.endswith(".dat") and f != "last_id.dat":
                 try:
@@ -1178,22 +1179,26 @@ def get_map_telemetry_data():
                 except Exception:
                     pass
 
+    spawn = read_spawn(WORLD_DIR, NBTReader)
     sec_db = load_security_db()
     waypoints = sec_db.get("waypoints", [
         {"id": "spawn", "name": "World Spawn", "dimension": "overworld", "x": 0, "z": 0, "y": 64, "color": "#6366f1", "icon": "🏠"}
     ])
 
+    waypoints = [dict(pin, x=spawn['x'], y=spawn['y'], z=spawn['z'], dimension=spawn['dimension'], color='#ffcc00')
+                 if pin.get('id') == 'spawn' else pin for pin in waypoints]
     return {
         "players": players_data,
         "tiles": tiles,
         "waypoints": waypoints,
-        "spawn": {"x": 0, "z": 0, "dimension": "overworld"}
+        "spawn": spawn
     }
 
 # ==============================================================================
 # MINECRAFT WORLD REGION TILE MAP ENGINE (.MCA ANVIL RENDERER)
 # ==============================================================================
 REGION_CACHE_DIR = os.path.join(WORLD_DIR, ".map_cache")
+MAP_MESH_CACHE_DIR = os.path.join(BASE_DIR, ".state", "map-cache")
 os.makedirs(REGION_CACHE_DIR, exist_ok=True)
 
 REGION_BLOCK_COLORS = {
@@ -1235,6 +1240,7 @@ def create_png_bytes(width, height, rgba_data):
     return png
 
 def get_dimension_region_dir(dim):
+    dim = map_dimension(dim)
     if 'nether' in dim:
         p = os.path.join(WORLD_DIR, 'dimensions', 'minecraft', 'the_nether', 'region')
         if os.path.exists(p): return p
@@ -1256,7 +1262,7 @@ def get_available_regions(dim='overworld'):
     import re
     for f in os.listdir(reg_dir):
         m = re.match(r'^r\.(-?\d+)\.(-?\d+)\.mca$', f)
-        if m:
+        if m and os.path.getsize(os.path.join(reg_dir, f)) > 8192:
             rx, rz = int(m.group(1)), int(m.group(2))
             regions.append({
                 'rx': rx,
@@ -1345,19 +1351,21 @@ def render_region_tile_png(dim='overworld', rx=0, rz=0, max_y=320):
 
 class MapRegionsHandler(ProtectedHandler):
     def get(self):
-        dim = self.get_argument("dim", "overworld").strip()
+        try: dim = map_dimension(self.get_argument("dim", "overworld").strip())
+        except ValueError as exc: raise tornado.web.HTTPError(400, str(exc))
         regions = get_available_regions(dim)
         self.set_header("Content-Type", "application/json")
         self.write(json.dumps({"dimension": dim, "regions": regions}))
 
 class MapRegionTileHandler(ProtectedHandler):
     async def get(self):
-        dim = self.get_argument("dim", "overworld").strip()
+        try: dim = map_dimension(self.get_argument("dim", "overworld").strip())
+        except ValueError as exc: raise tornado.web.HTTPError(400, str(exc))
         rx = int(self.get_argument("rx", "0"))
         rz = int(self.get_argument("rz", "0"))
         layer = int(self.get_argument("layer", "320"))
         
-        if dim not in ('overworld', 'nether', 'end') or not -64 <= layer <= 512:
+        if dim not in ('overworld', 'the_nether', 'the_end') or not -64 <= layer <= 512:
             raise tornado.web.HTTPError(400)
         async with TERRAIN_SLOTS:
             png_data = await asyncio.to_thread(render_region_tile_png, dim, rx, rz, layer)
@@ -1370,10 +1378,32 @@ class MapRegionTileHandler(ProtectedHandler):
         self.set_header("Cache-Control", "no-cache")
         self.write(png_data)
 
+class MapTerrainHandler(ProtectedHandler):
+    def initialize(self):
+        self.disconnected = False
+
+    def on_connection_close(self):
+        self.disconnected = True
+
+    async def get(self):
+        try:
+            dim = map_dimension(self.get_argument('dim', 'overworld'))
+            rx, rz = int(self.get_argument('rx', '0')), int(self.get_argument('rz', '0'))
+            step, layer = int(self.get_argument('step', '8')), int(self.get_argument('layer', '320'))
+            async with TERRAIN_SLOTS:
+                if self.disconnected: return
+                tile = await asyncio.to_thread(mesh_tile, get_dimension_region_dir(dim), MAP_MESH_CACHE_DIR,
+                    dim, rx, rz, step, layer, NBTReader, REGION_BLOCK_COLORS)
+        except ValueError as exc: raise tornado.web.HTTPError(400, str(exc))
+        if self.disconnected: return
+        if tile is None: raise tornado.web.HTTPError(404, 'No saved terrain in this region')
+        self.set_header('Cache-Control', 'no-cache')
+        self.write(tile)
+
 class MapDataHandler(ProtectedHandler):
-    def get(self):
+    async def get(self):
         self.set_header("Content-Type", "application/json")
-        self.write(json.dumps(get_map_telemetry_data()))
+        self.write(await asyncio.to_thread(get_map_telemetry_data, include_tiles=self.get_argument("terrain_only", "0") != "1"))
 
 class MapWaypointsHandler(ProtectedHandler):
     def post(self):
@@ -1838,12 +1868,13 @@ def make_app():
         (r"/api/security/toggle_admin_session", SecurityToggleAdminSessionHandler),
         (r"/api/security/toggle", SecurityToggleHandler),
         (r"/api/map/data", MapDataHandler),
+        (r"/api/map/terrain", MapTerrainHandler),
         (r"/api/map/regions", MapRegionsHandler),
         (r"/api/map/region_tile", MapRegionTileHandler),
         (r"/api/map/waypoints", MapWaypointsHandler),
         (r"/ws/live", LiveWebSocket),
         (r"/(.*)", NoCacheStaticFileHandler, {"path": STATIC_DIR, "default_filename": "index.html"}),
-    ], xsrf_cookies=True, websocket_max_message_size=65536)
+    ], xsrf_cookies=True, websocket_max_message_size=65536, compress_response=True)
 
 def main():
     global last_log_offset

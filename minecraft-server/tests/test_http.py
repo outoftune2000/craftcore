@@ -38,10 +38,24 @@ class HTTPTests(AsyncHTTPTestCase):
         session=response.headers.get_list('Set-Cookie')[0].split(';')[0]
         return cookie+'; '+session,csrf
     def test_private_endpoints_and_setup_page(self):
-        for path in ['/api/status','/api/config','/api/setup/status','/api/versions']:
+        for path in ['/api/status','/api/config','/api/setup/status','/api/versions','/api/map/terrain']:
             self.assertEqual(self.fetch(path).code,401)
         response=self.fetch('/setup');self.assertEqual(response.code,200,response.body)
         self.assertIn(b'Your world starts here',response.body)
+    def test_map_dimension_aliases(self):
+        cookie,csrf=self.claim();ins.save_settings(ins.settings()|{'complete':True})
+        with patch.object(server,'mesh_tile',return_value={'heights':[],'colors':[]}) as mesh:
+            response=self.fetch('/api/map/terrain?dim=nether&rx=0&rz=0',headers={'Cookie':cookie})
+            self.assertEqual(response.code,200)
+            self.assertEqual(mesh.call_args.args[2],'the_nether')
+        response=self.fetch('/api/map/terrain?dim=invalid',headers={'Cookie':cookie})
+        self.assertEqual(response.code,400)
+
+    def test_map_invalid_detail_rejected(self):
+        cookie,csrf=self.claim();ins.save_settings(ins.settings()|{'complete':True})
+        response=self.fetch('/api/map/terrain?dim=overworld&step=7',headers={'Cookie':cookie})
+        self.assertEqual(response.code,400)
+
     def test_csrf_required_for_claim(self):
         response=self.fetch('/api/setup/admin',method='POST',body='{}')
         self.assertEqual(response.code,403)
