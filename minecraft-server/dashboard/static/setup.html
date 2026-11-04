@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CraftCore · Setup</title><link rel="stylesheet" href="/setup.css"></head>
+<body><main>
+<header><span class="logo">▧</span><div><p class="eyebrow">CRAFTCORE</p><h1>Your world starts here.</h1><p>Set up a private dashboard and choose the Minecraft server you want to run.</p></div></header>
+<ol id="steps"><li>1 · Secure access</li><li>2 · Minecraft</li><li>3 · Configure</li><li>4 · Launch</li></ol>
+<p id="error" role="alert" hidden></p>
+<section id="access"><h2 id="access-title">Secure your dashboard</h2><form id="access-form">
+<label id="token-label">First-run token<input id="token" autocomplete="off"><small>Printed in the server terminal by <code>./server.sh gui</code>.</small></label>
+<label>Administrator name<input id="username" autocomplete="username" required maxlength="64"></label>
+<label>Password<input id="password" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label>
+<button type="submit" id="access-submit">Create administrator</button></form></section>
+<section id="minecraft" hidden><h2>Choose Minecraft</h2>
+<aside id="existing" hidden><strong id="existing-title"></strong><p>Import preserves the world and settings. It will not download a jar or restart Minecraft.</p><button id="import">Import existing server</button></aside>
+<label class="check"><input type="checkbox" id="snapshots"> Include experimental snapshots</label>
+<div class="row"><label>Vanilla version<select id="version"></select></label><button id="refresh" class="secondary">Refresh</button><button id="older" class="secondary" hidden>Load older versions</button></div>
+<p id="catalog-status" class="muted" aria-live="polite"></p><p id="java-required"></p>
+<label>Java executable<input id="java" value="java" placeholder="java or /usr/lib/jvm/.../bin/java"></label>
+<div class="row"><button id="check-java" class="secondary">Check Java</button><span id="java-status" role="status"></span></div>
+<p class="muted">Install the required OpenJDK version with your system package manager if needed. CraftCore does not install system software.</p>
+<label id="snapshot-label" class="check" hidden><input type="checkbox" id="snapshot-confirm"> I understand snapshots are experimental and can change or damage world data.</label>
+<div class="actions"><button id="to-config">Continue</button></div></section>
+<section id="configure" hidden><h2>Make it yours</h2><div class="grid">
+<label>Server name<input id="name" value="Minecraft Server" maxlength="100"></label>
+<label>Memory (MB)<input id="memory_mb" type="number" min="512" max="262144" value="4096"></label>
+<label>Game mode<select id="gamemode"><option>survival</option><option>creative</option><option>adventure</option><option>spectator</option></select></label>
+<label>Difficulty<select id="difficulty"><option>easy</option><option>normal</option><option>hard</option><option>peaceful</option></select></label>
+<label>Player limit<input id="max_players" type="number" min="1" max="1000" value="20"></label>
+<label>Public game port<input id="proxy_port" type="number" min="1024" max="65535" value="25565"></label>
+<label>Internal game port<input id="server_port" type="number" min="1024" max="65535" value="25566"></label></div>
+<label class="check"><input type="checkbox" id="online_mode" checked> Authenticate Minecraft accounts (recommended)</label>
+<label id="offline-label" class="check warning" hidden><input type="checkbox" id="offline-confirm"> I understand offline mode allows username impersonation, including administrator names.</label>
+<label class="check"><input type="checkbox" id="eula"> I have read and accept the <a href="https://www.minecraft.net/eula" target="_blank" rel="noopener noreferrer">Minecraft EULA</a>.</label>
+<div class="actions"><button class="secondary" id="back-version">Back</button><button id="to-review">Review setup</button></div></section>
+<section id="review" hidden><h2>Ready when you are</h2><p id="review-description"></p><dl id="summary"></dl>
+<p class="muted">Available-version updates never automatically upgrade your server. Version changes require a stopped server and a successful world backup. In-place downgrades are blocked.</p>
+<div id="job" hidden><progress id="progress" max="100" value="0"></progress><p id="job-message" aria-live="polite"></p></div>
+<div class="actions"><button id="back-config" class="secondary">Back</button><button id="finish-only" class="secondary">Finish without starting</button><button id="finish-start">Start server</button></div></section>
+<section id="done" hidden><h2>Setup complete</h2><p id="done-message">Your server configuration is saved.</p><p>Playit is optional. Configure it later using <code>./server.sh tunnel-setup</code>.</p><a class="button" href="/">Open dashboard</a></section>
+<footer><a href="/">Dashboard</a><button id="logout" class="secondary" hidden>Sign out</button><span>Dashboard access stays on localhost. Use SSH forwarding for remote access.</span></footer>
+</main><script src="/session.js"></script><script src="/setup.js"></script></body></html>

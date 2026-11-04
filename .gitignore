@@ -1,0 +1,51 @@
+# Binaries
+*.jar
+minecraft-server/playit
+minecraft-server/playitd
+
+# Runtime files & logs
+*.log
+*.pid
+*.fifo
+*.sock
+.console_history
+minecraft-server/cache/
+minecraft-server/libraries/
+minecraft-server/versions/
+minecraft-server/logs/
+
+# World data & backups
+minecraft-server/world/
+minecraft-server/world_*/
+
+# Python cache
+__pycache__/
+*.pyc
+.DS_Store
+
+# Generated backups and runtime state
+minecraft-server/backups/
+minecraft-server/active_players.json
+minecraft-server/security_db.json
+
+# Private configuration and player state
+.env
+.env.*
+!.env.example
+minecraft-server/server.properties
+minecraft-server/playit.toml
+minecraft-server/ops.json
+minecraft-server/usercache.json
+minecraft-server/whitelist.json
+minecraft-server/banned-ips.json
+minecraft-server/banned-players.json
+minecraft-server/plugins/
+
+# Installation credentials, state, and generated EULA
+minecraft-server/.state/
+minecraft-server/eula.txt
+minecraft-server/*.part
+minecraft-server/.world-import-*/
+
+minecraft-server/version_history.json
+minecraft-server/.venv/
