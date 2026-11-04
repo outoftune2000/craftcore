@@ -2,12 +2,12 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CraftCore · Setup</title><link rel="stylesheet" href="/setup.css"><link rel="stylesheet" href="/arcade.css?v=15"></head>
 <body class="setup-page"><main>
-<header><span class="logo">▧</span><div><p class="eyebrow">CRAFTCORE</p><h1>Your world starts here.</h1><p>Set up a private dashboard and choose the Minecraft server you want to run.</p></div></header>
+<header><span class="logo">▧</span><div><p class="eyebrow">CRAFTCORE</p><h1>Your world starts here.</h1><p><span id="auth-intro">Set up a private dashboard and choose the Minecraft server you want to run.</span></p></div></header>
 <ol id="steps"><li>1 · Secure access</li><li>2 · Minecraft</li><li>3 · Configure</li><li>4 · Launch</li></ol>
 <p id="error" role="alert" hidden></p>
 <section id="access"><h2 id="access-title">Secure your dashboard</h2><form id="access-form">
 <label id="token-label">First-run token<input id="token" autocomplete="off"><small>Printed in the server terminal by <code>./server.sh gui</code>.</small></label>
-<label>Administrator name<input id="username" autocomplete="username" required maxlength="64"></label>
+<label><span id="login-username-label">Administrator name</span><input id="username" autocomplete="username" required maxlength="64"></label>
 <label>Password<input id="password" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label>
 <button type="submit" id="access-submit">Create administrator</button></form></section>
 <section id="minecraft" hidden><h2>Choose Minecraft</h2>

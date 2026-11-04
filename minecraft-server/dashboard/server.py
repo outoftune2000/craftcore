@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import asyncio
+import uuid as uuid_module
 from pathlib import Path
 import sys
 import json
@@ -22,8 +23,10 @@ import tornado.ioloop
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from installation import settings, operation_lock
 from dashboard.access import (ProtectedHandler, session, same_origin, bootstrap_token,
-    AuthStatusHandler, LoginHandler, LogoutHandler, AdminHandler)
+    AuthStatusHandler, LoginHandler, LogoutHandler, AdminHandler, ActivateHandler)
 from dashboard.setup_api import routes as setup_routes
+from dashboard import access as account_access
+from dashboard.roles import metrics_for, map_for
 from terrain import surface
 from map_terrain import dimension as map_dimension, mesh_tile, read_spawn
 
@@ -826,7 +829,7 @@ def send_server_cmd(cmd_text):
 class StatusHandler(ProtectedHandler):
     def get(self):
         self.set_header("Content-Type", "application/json")
-        self.write(json.dumps(get_server_metrics()))
+        self.write(metrics_for(get_server_metrics(), session(self)))
 
 class ActionHandler(ProtectedHandler):
     def post(self):
@@ -993,13 +996,14 @@ def get_player_inventory_details(uuid_or_name):
     target_uuid = None
     target_name = uuid_or_name
     
-    if "-" in uuid_or_name and len(uuid_or_name) >= 32:
-        target_uuid = uuid_or_name
-        target_name = uuid_to_name.get(target_uuid, target_name)
-    elif uuid_or_name.lower() in usercache:
-        target_uuid = usercache[uuid_or_name.lower()]
-        target_name = uuid_to_name.get(target_uuid, target_name)
-        
+    try:
+        target_uuid = str(uuid_module.UUID(uuid_or_name))
+    except (ValueError, TypeError, AttributeError):
+        if re.fullmatch(r'[A-Za-z0-9_]{1,16}', str(uuid_or_name)) and uuid_or_name.lower() in usercache:
+            try: target_uuid = str(uuid_module.UUID(usercache[uuid_or_name.lower()]))
+            except (ValueError, TypeError, AttributeError): return None
+    if target_uuid: target_name = uuid_to_name.get(target_uuid, target_name)
+
     if not target_uuid:
         return None
 
@@ -1070,22 +1074,74 @@ def get_player_inventory_details(uuid_or_name):
         print(f"[Server] Error reading player inventory {target_uuid}: {e}")
         return None
 
+def known_dashboard_players():
+    names = {}
+    if os.path.exists(USERCACHE_FILE):
+        try:
+            for entry in json.loads(Path(USERCACHE_FILE).read_text()):
+                try: names[str(uuid_module.UUID(entry['uuid']))] = entry.get('name', entry['uuid'])
+                except (ValueError, KeyError, TypeError): pass
+        except (OSError, ValueError): pass
+    players = {}
+    for folder in (Path(WORLD_DIR)/'players/data', Path(WORLD_DIR)/'playerdata'):
+        if folder.exists():
+            for path in folder.glob('*.dat'):
+                try:
+                    key = str(uuid_module.UUID(path.stem))
+                    players[key] = {'uuid':key,'name':names.get(key, 'Player '+key[:8])}
+                except ValueError: pass
+    return sorted(players.values(),key=lambda p:p['name'].casefold())
+
 class PlayerInventoryHandler(ProtectedHandler):
-    def get(self):
-        self.set_header("Content-Type", "application/json")
-        uuid_or_name = self.get_argument("uuid", None) or self.get_argument("name", None) or ""
-        if not uuid_or_name:
-            self.set_status(400)
-            self.write({"success": False, "error": "Player UUID or username required"})
-            return
-            
-        data = get_player_inventory_details(uuid_or_name)
-        if not data:
-            self.set_status(404)
-            self.write({"success": False, "error": f"Player data for '{uuid_or_name}' not found"})
-            return
-            
-        self.write(json.dumps({"success": True, "player": data}))
+    async def get(self):
+        identity = session(self)
+        requested = self.get_argument('uuid', None) or self.get_argument('name', None)
+        if identity['role']=='player':
+            if requested:
+                try: target = str(uuid_module.UUID(requested))
+                except ValueError:
+                    players = await asyncio.to_thread(known_dashboard_players)
+                    target = next((p['uuid'] for p in players if p['name'].casefold()==requested.casefold()),None)
+                if target != identity['player_uuid']: raise tornado.web.HTTPError(403, 'Only your own inventory is available')
+            requested = identity['player_uuid']
+        if not requested: raise tornado.web.HTTPError(400, 'Player UUID is required')
+        player = await asyncio.to_thread(get_player_inventory_details, requested)
+        if not player: raise tornado.web.HTTPError(404, 'Saved inventory not found')
+        self.write({'success':True,'player':player})
+
+class MeHandler(ProtectedHandler):
+    async def get(self):
+        identity=session(self)
+        player = await asyncio.to_thread(get_player_inventory_details,identity['player_uuid']) if identity['role']=='player' else None
+        self.write({'user':account_access.public_identity(identity),'player':player})
+
+class AccountsHandler(ProtectedHandler):
+    async def get(self):
+        self.write({'accounts':account_access.list_player_accounts(),
+                    'players':await asyncio.to_thread(known_dashboard_players)})
+
+    async def post(self):
+        try:
+            data=json.loads(self.request.body)
+            if not isinstance(data,dict): raise ValueError('Expected an object')
+            if data.get('action','create')=='create':
+                players=await asyncio.to_thread(known_dashboard_players)
+                player=next((p for p in players if p['uuid']==data.get('player_uuid')),None)
+                if not player: raise ValueError('Select a player who has joined and has saved player data')
+                result=await asyncio.to_thread(account_access.create_player_account,data.get('username'),player['uuid'],player['name'])
+            elif data.get('action')=='reset':
+                result=await asyncio.to_thread(account_access.reset_player_account,data.get('id'))
+            else: raise ValueError('Unknown account action')
+            self.write({'success':True,**result})
+        except (ValueError,TypeError) as exc: raise tornado.web.HTTPError(400,str(exc))
+
+    async def delete(self):
+        try:
+            data=json.loads(self.request.body)
+            if not isinstance(data,dict): raise ValueError('Expected an object')
+            await asyncio.to_thread(account_access.delete_player_account,data.get('id'))
+            self.write({'success':True})
+        except (ValueError,TypeError) as exc: raise tornado.web.HTTPError(400,str(exc))
 
 class PlayersHandler(ProtectedHandler):
     def get(self):
@@ -1403,7 +1459,7 @@ class MapTerrainHandler(ProtectedHandler):
 class MapDataHandler(ProtectedHandler):
     async def get(self):
         self.set_header("Content-Type", "application/json")
-        self.write(await asyncio.to_thread(get_map_telemetry_data, include_tiles=self.get_argument("terrain_only", "0") != "1"))
+        self.write(map_for(await asyncio.to_thread(get_map_telemetry_data, include_tiles=self.get_argument("terrain_only", "0") != "1"), session(self)))
 
 class MapWaypointsHandler(ProtectedHandler):
     def post(self):
@@ -1637,14 +1693,15 @@ class LiveWebSocket(tornado.websocket.WebSocketHandler):
         return same_origin(self, origin)
 
     def open(self):
+        if not session(self): self.close(4401, 'Session expired'); return
         self.expiry_timer = tornado.ioloop.PeriodicCallback(self.expire_session, 30000)
         self.expiry_timer.start()
         active_ws_clients.add(self)
         self.write_message(json.dumps({
             "type": "metrics",
-            "data": get_server_metrics()
+            "data": metrics_for(get_server_metrics(), session(self))
         }))
-        if os.path.exists(LOG_FILE):
+        if session(self).get('role')=='admin' and os.path.exists(LOG_FILE):
             try:
                 with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
                     lines = f.readlines()
@@ -1662,6 +1719,8 @@ class LiveWebSocket(tornado.websocket.WebSocketHandler):
         try:
             msg = json.loads(message)
             if msg.get("type") == "cmd":
+                if session(self).get('role')!='admin':
+                    self.write_message(json.dumps({'type':'error','message':'Administrator access required'})); return
                 cmd = msg.get("cmd", "").strip()
                 if cmd.startswith("/"):
                     cmd = cmd[1:]
@@ -1692,7 +1751,7 @@ def broadcast_metrics():
                 client.close(4401, 'Session expired')
                 active_ws_clients.discard(client)
                 continue
-            client.write_message(msg)
+            client.write_message(json.dumps({"type":"metrics","data":metrics_for(metrics,session(client))}))
         except Exception:
             active_ws_clients.discard(client)
 
@@ -1717,6 +1776,10 @@ def broadcast_logs():
                     msg = json.dumps({"type": "log", "lines": lines})
                     for client in list(active_ws_clients):
                         try:
+                            identity=session(client)
+                            if not identity:
+                                client.close(4401,'Session expired');continue
+                            if identity['role']!='admin': continue
                             client.write_message(msg)
                         except Exception:
                             active_ws_clients.discard(client)
@@ -1824,15 +1887,22 @@ class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
     def prepare(self):
         self.xsrf_token
         path = self.request.path
+        if path == '/join':
+            self.path_args = ['join.html']; return
         if path in ('/login', '/setup'):
+            if session(self) and session(self)['role']=='player': self.redirect('/'); return
             self.path_args = ['setup.html']
             return
-        if path in ('/setup.html', '/setup.js', '/setup.css', '/session.js', '/arcade.css', '/fonts/inter.woff2', '/fonts/pixel.woff2'):
+        if path in ('/setup.html', '/setup.js', '/setup.css', '/session.js', '/join.html', '/join.js', '/arcade.css', '/fonts/inter.woff2', '/fonts/pixel.woff2'):
             return
         if not session(self):
             self.redirect('/login'); return
         if not settings()['complete']:
             self.redirect('/setup'); return
+        if session(self)['role']=='player' and path in ('/', '/index.html'):
+            self.path_args=['player.html']
+        if session(self)['role']=='player' and path in ('/app.js','/accounts.js'):
+            raise tornado.web.HTTPError(403)
 
     def set_extra_headers(self, path):
         self.set_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
@@ -1844,6 +1914,9 @@ def make_app():
         (r"/api/auth/status", AuthStatusHandler),
         (r"/api/auth/login", LoginHandler),
         (r"/api/auth/logout", LogoutHandler),
+        (r"/api/auth/activate", ActivateHandler),
+        (r"/api/me", MeHandler),
+        (r"/api/accounts", AccountsHandler),
         (r"/api/setup/admin", AdminHandler),
         *setup_routes(),
         (r"/api/status", StatusHandler),

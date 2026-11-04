@@ -7,14 +7,96 @@ import json
 import secrets
 import threading
 import time
+import re
+import uuid
+from contextlib import contextmanager
 from urllib.parse import urlparse
 import tornado.web
 from installation import STATE, read_json, write_json, settings
+from dashboard.roles import PLAYER_READ_PATHS
 
 AUTH_LOCK = threading.Lock()
 SESSIONS = {}
 ATTEMPTS = {}
 SESSION_SECONDS = 8 * 3600
+INVITE_SECONDS = 48 * 3600
+
+@contextmanager
+def credential_lock():
+    import fcntl
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with AUTH_LOCK, open(STATE / 'accounts.lock', 'a+b') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        try: yield
+        finally: fcntl.flock(stream, fcntl.LOCK_UN)
+
+def player_store():
+    return read_json(STATE / 'players.json', {'accounts': {}})
+
+def identity_for(account_id, account):
+    return {key:account[key] for key in ('username','player_uuid','minecraft_name') if key in account} | {
+        'role':'player', 'account_id':account_id, 'credential_version':account['credential_version']}
+
+def admin_identity():
+    account = read_json(STATE / 'admin.json')
+    return {'role':'admin','username':account.get('username',''), 'credential_version':account.get('credential_version',1)}
+
+def public_identity(identity):
+    return {key:identity[key] for key in ('role','username','player_uuid','minecraft_name') if key in identity}
+
+def list_player_accounts():
+    return [dict(id=key, **{field:value.get(field) for field in ('username','player_uuid','minecraft_name','created_at')},
+                 status='active' if value.get('hash') else 'invited',invite_expires=value.get('invite_expires'))
+            for key,value in player_store()['accounts'].items()]
+
+def create_player_account(username, player_uuid, minecraft_name):
+    if not isinstance(username,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{3,32}',username):
+        raise ValueError('Login name must be 3–32 letters, numbers, dots, underscores, or hyphens')
+    player_uuid = str(uuid.UUID(player_uuid))
+    with credential_lock():
+        store = player_store()
+        names = [v['username'].casefold() for v in store['accounts'].values()]
+        names.append(read_json(STATE/'admin.json').get('username','').casefold())
+        if username.casefold() in names: raise ValueError('That dashboard login name is already in use')
+        if any(v['player_uuid']==player_uuid for v in store['accounts'].values()):
+            raise ValueError('This Minecraft player already has dashboard access; reset its invitation instead')
+        account_id = secrets.token_hex(16)
+        token = secrets.token_urlsafe(32)
+        store['accounts'][account_id] = {'username':username,'player_uuid':player_uuid,
+            'minecraft_name':minecraft_name,'created_at':time.time(),'credential_version':secrets.token_hex(16),
+            'invite_hash':hashlib.sha256(token.encode()).hexdigest(),'invite_expires':time.time()+INVITE_SECONDS}
+        write_json(STATE/'players.json',store)
+    return {'id':account_id,'token':token,'username':username}
+
+def reset_player_account(account_id):
+    with credential_lock():
+        store=player_store();account=store['accounts'].get(account_id)
+        if not account: raise ValueError('Dashboard account not found')
+        token=secrets.token_urlsafe(32)
+        account.update(credential_version=secrets.token_hex(16),invite_hash=hashlib.sha256(token.encode()).hexdigest(),
+                       invite_expires=time.time()+INVITE_SECONDS)
+        account.pop('hash',None);account.pop('salt',None)
+        write_json(STATE/'players.json',store)
+        return {'id':account_id,'token':token,'username':account['username']}
+
+def delete_player_account(account_id):
+    with credential_lock():
+        store=player_store()
+        if account_id not in store['accounts']: raise ValueError('Dashboard account not found')
+        del store['accounts'][account_id];write_json(STATE/'players.json',store)
+
+def activate_player(token, password):
+    if not isinstance(token,str) or not 30 <= len(token) <= 100: raise ValueError('Invitation is invalid or expired')
+    if not isinstance(password,str) or not 12 <= len(password) <= 256: raise ValueError('Use a password of 12–256 characters')
+    digest=hashlib.sha256(token.encode()).hexdigest()
+    with credential_lock():
+        store=player_store()
+        for key,account in store['accounts'].items():
+            if account.get('invite_expires',0)>time.time() and hmac.compare_digest(account.get('invite_hash',''),digest):
+                account.update(hash_password(password));account.pop('invite_hash',None);account.pop('invite_expires',None)
+                write_json(STATE/'players.json',store)
+                return identity_for(key,account)
+    raise ValueError('Invitation is invalid or expired')
 
 def bootstrap_token():
     with AUTH_LOCK:
@@ -39,17 +121,25 @@ def create_admin(token, username, password):
     from installation import operation_lock
     with operation_lock(), AUTH_LOCK:
         if (STATE / 'admin.json').exists(): raise ValueError('Administrator is already configured')
+        if any(v['username'].casefold()==username.strip().casefold() for v in player_store()['accounts'].values()):
+            raise ValueError('That login name belongs to a player; choose another administrator name')
         expected = read_json(STATE / 'bootstrap.json').get('token', '')
         if not expected or not isinstance(token, str) or not hmac.compare_digest(token, expected):
             raise ValueError('Invalid setup token; read it from the server terminal')
-        write_json(STATE / 'admin.json', {'username': username.strip(), **hash_password(password)})
+        write_json(STATE / 'admin.json', {'username': username.strip(), 'credential_version':secrets.token_hex(16), **hash_password(password)})
         (STATE / 'bootstrap.json').unlink(missing_ok=True)
 
 def authenticate(username, password):
     admin = read_json(STATE / 'admin.json')
-    if not admin or not isinstance(password, str) or len(password) > 256: return False
-    candidate = hash_password(password, bytes.fromhex(admin['salt']))
-    return hmac.compare_digest(candidate['hash'], admin['hash']) and username == admin['username']
+    if not isinstance(username,str) or not isinstance(password,str) or len(password)>256: return False
+    if admin and username.strip().casefold()==admin['username'].casefold():
+        candidate=hash_password(password,bytes.fromhex(admin['salt']))
+        return admin_identity() if hmac.compare_digest(candidate['hash'],admin['hash']) else False
+    for key,account in player_store()['accounts'].items():
+        if username.strip().casefold()==account['username'].casefold() and account.get('hash'):
+            candidate=hash_password(password,bytes.fromhex(account['salt']))
+            return identity_for(key,account) if hmac.compare_digest(candidate['hash'],account['hash']) else False
+    return False
 
 def session(handler):
     token = handler.get_cookie('craftcore_session', '')
@@ -58,16 +148,25 @@ def session(handler):
     if not entry or entry['expires'] <= time.time():
         SESSIONS.pop(key, None)
         return None
+    if entry.get('role')=='admin':
+        account=read_json(STATE/'admin.json')
+        valid=bool(account) and entry.get('username')==account.get('username') and entry.get('credential_version')==account.get('credential_version',1)
+    elif entry.get('role')=='player':
+        account=player_store()['accounts'].get(entry.get('account_id'))
+        valid=bool(account and account.get('hash')) and entry.get('credential_version')==account.get('credential_version') and entry.get('player_uuid')==account.get('player_uuid')
+    else: valid=False
+    if not valid:
+        SESSIONS.pop(key,None);return None
     return entry
 
-def new_session(handler):
+def new_session(handler, identity):
     token = secrets.token_urlsafe(32)
     # Bound memory and discard expired sessions.
     now = time.time()
     for key, entry in list(SESSIONS.items()):
         if entry['expires'] <= now: SESSIONS.pop(key, None)
     if len(SESSIONS) >= 100: SESSIONS.pop(next(iter(SESSIONS)))
-    SESSIONS[hashlib.sha256(token.encode()).hexdigest()] = {'expires': now + SESSION_SECONDS}
+    SESSIONS[hashlib.sha256(token.encode()).hexdigest()] = {**identity,'expires': now + SESSION_SECONDS}
     handler.set_cookie('craftcore_session', token, httponly=True, samesite='Strict',
                        secure=handler.request.protocol == 'https', max_age=SESSION_SECONDS)
 
@@ -80,7 +179,10 @@ class ProtectedHandler(tornado.web.RequestHandler):
 
     def prepare(self):
         self.xsrf_token
-        if not session(self): raise tornado.web.HTTPError(401, 'Sign in required')
+        identity=session(self)
+        if not identity: raise tornado.web.HTTPError(401, 'Sign in required')
+        if identity['role']!='admin' and (self.request.method!='GET' or self.request.path not in PLAYER_READ_PATHS):
+            raise tornado.web.HTTPError(403,'Administrator access required')
         if not settings()['complete']: raise tornado.web.HTTPError(409, 'Complete first-run setup')
 
 class PublicHandler(ProtectedHandler):
@@ -96,8 +198,9 @@ class PublicHandler(ProtectedHandler):
 
 class AuthStatusHandler(PublicHandler):
     def get(self):
+        identity=session(self)
         self.write({'admin_exists': (STATE / 'admin.json').exists(), 'authenticated': bool(session(self)),
-                    'complete': settings()['complete']})
+                    'complete': settings()['complete'],'user':public_identity(identity) if identity else None})
 
 def throttle(handler):
     key = handler.request.remote_ip
@@ -108,9 +211,10 @@ def throttle(handler):
 class LoginHandler(PublicHandler):
     async def post(self):
         throttle(self); data = self.body_json()
-        if not await asyncio.to_thread(authenticate, data.get('username'), data.get('password')):
+        identity=await asyncio.to_thread(authenticate, data.get('username'), data.get('password'))
+        if not identity:
             raise tornado.web.HTTPError(401, 'Invalid login')
-        new_session(self); self.write({'success': True})
+        new_session(self,identity); self.write({'success': True,'user':public_identity(identity)})
 
 class AdminHandler(PublicHandler):
     async def post(self):
@@ -118,7 +222,14 @@ class AdminHandler(PublicHandler):
         try:
             await asyncio.to_thread(create_admin, data.get('token'), data.get('username'), data.get('password'))
         except ValueError as exc: raise tornado.web.HTTPError(400, str(exc))
-        new_session(self); self.write({'success': True})
+        new_session(self,admin_identity()); self.write({'success': True})
+
+class ActivateHandler(PublicHandler):
+    async def post(self):
+        throttle(self);data=self.body_json()
+        try: identity=await asyncio.to_thread(activate_player,data.get('token'),data.get('password'))
+        except ValueError as exc: raise tornado.web.HTTPError(400,str(exc))
+        new_session(self,identity);self.write({'success':True,'user':public_identity(identity)})
 
 class LogoutHandler(PublicHandler):
     def post(self):

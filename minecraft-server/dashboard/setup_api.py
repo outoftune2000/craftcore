@@ -15,6 +15,7 @@ class SetupHandler(PublicHandler):
     def prepare(self):
         super().prepare()
         if not session(self): raise tornado.web.HTTPError(401, 'Sign in required')
+        if session(self)['role']!='admin': raise tornado.web.HTTPError(403, 'Administrator access required')
 
 class SetupStatusHandler(SetupHandler):
     async def get(self):

@@ -100,11 +100,15 @@ document.addEventListener('change',()=>{if(auth?.authenticated&&currentStep>1)pe
   auth=await api('/api/auth/status');
   if(!auth.authenticated) {
     show('access',1);$('token-label').hidden=auth.admin_exists;
+    if(auth.admin_exists)$('steps').hidden=true;
     $('access-title').textContent=auth.admin_exists?'Welcome back':'Secure your dashboard';
+    if($('login-username-label'))$('login-username-label').textContent=auth.admin_exists?'Dashboard username':'Administrator name';
+    if(auth.admin_exists&&$('auth-intro'))$('auth-intro').textContent='Sign in with your administrator or player dashboard account.';
     $('access-submit').textContent=auth.admin_exists?'Sign in':'Create administrator';
     $('password').autocomplete=auth.admin_exists?'current-password':'new-password';
     return;
   }
+  if(auth.user?.role==='player'){location.assign('/');return;}
   $('logout').hidden=false;status=await api('/api/setup/status');
   const draft={...status.settings,...status.draft};
   for(const id of fields) if(draft[id]!==undefined&&id!=='version') {if($(id).type==='checkbox')$(id).checked=draft[id];else $(id).value=draft[id];}

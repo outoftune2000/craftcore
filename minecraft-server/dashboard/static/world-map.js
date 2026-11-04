@@ -257,13 +257,13 @@
       const strong=document.createElement('strong');strong.textContent=title;const small=document.createElement('small');small.textContent=sub;info.append(strong,small);root.append(info);
       const buttons=document.createElement('div');buttons.className='map-item-actions';for(const [label,fn] of actions){const b=document.createElement('button');b.className='map-player-action';b.textContent=label;b.addEventListener('click',fn);buttons.append(b);}root.append(buttons);return root;
     }
-    for(const p of players)playerList.append(row(playerName(p),`${p.is_online?'Online · ':'Last saved · '}X ${Math.round(p.pos.x)} / Z ${Math.round(p.pos.z)}`,[['Jump',()=>focusMapLocation(p.pos.x,p.pos.z)],['Inventory',()=>openInventoryModal(p.uuid,p.name)]],'map-player-item'));
+    for(const p of players)playerList.append(row(playerName(p),`${p.is_online?'Online · ':'Last saved · '}X ${Math.round(p.pos.x)} / Z ${Math.round(p.pos.z)}`,[['Jump',()=>focusMapLocation(p.pos.x,p.pos.z)],['Inventory',()=>openInventoryModal(p.uuid,p.name)]].filter(([label])=>label!=='Inventory'||typeof window.canInspectPlayer!=='function'||window.canInspectPlayer(p.uuid)),'map-player-item'));
     if(!players.length){const empty=document.createElement('p');empty.className='empty-msg';empty.textContent='No saved player positions in this dimension.';playerList.append(empty);}
     const pins=$('map-waypoints-list');pins.replaceChildren();
     for(const p of (mapData.waypoints||[]).filter(p=>canonical(p.dimension)===mapState.currentDim)){
-      const actions=[['Jump',()=>focusMapLocation(p.x,p.z)]];if(p.id!=='spawn')actions.push(['Delete',()=>deleteCustomWaypoint(p.id)]);
+      const actions=[['Jump',()=>focusMapLocation(p.x,p.z)]];if(p.id!=='spawn'&&window.CRAFTCORE_ROLE!=='player')actions.push(['Delete',()=>deleteCustomWaypoint(p.id)]);
       pins.append(row(p.name,`X ${Math.round(p.x)} / Y ${Math.round(p.y??64)} / Z ${Math.round(p.z)}`,actions,'map-wp-item'));
     }
-    if(!pins.children.length){const empty=document.createElement('p');empty.className='empty-msg';empty.textContent='Add a pin for a base, farm, or portal.';pins.append(empty);}
+    if(!pins.children.length){const empty=document.createElement('p');empty.className='empty-msg';empty.textContent=window.CRAFTCORE_ROLE==='player'?'No shared waypoints in this dimension.':'Add a pin for a base, farm, or portal.';pins.append(empty);}
   };
 })();

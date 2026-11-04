@@ -83,7 +83,8 @@ class HTTPTests(AsyncHTTPTestCase):
     async def test_backup_does_not_block_http(self):
         response=await self.http_client.fetch(self.get_url('/api/auth/status'))
         cookie=response.headers.get_list('Set-Cookie')[0].split(';')[0];csrf=cookie.split('=',1)[1]
-        token='test-background-session';access.SESSIONS[hashlib.sha256(token.encode()).hexdigest()]={'expires':time.time()+100}
+        access.create_admin(self.token,'admin','long-test-password')
+        token='test-background-session';access.SESSIONS[hashlib.sha256(token.encode()).hexdigest()]={**access.admin_identity(),'expires':time.time()+100}
         ins.save_settings(ins.settings()|{'complete':True})
         def slow_backup(**kwargs):time.sleep(.3);return True,'test.zip'
         with patch.object(server,'perform_world_backup',side_effect=slow_backup):
@@ -97,7 +98,8 @@ class HTTPTests(AsyncHTTPTestCase):
         url=self.get_url('/ws/live').replace('http','ws',1)
         with self.assertRaises(HTTPClientError):await websocket_connect(HTTPRequest(url,headers={'Origin':self.get_url('/').rstrip('/')}))
         # A session alone does not permit cross-origin or missing-Origin requests.
-        token='testsession';access.SESSIONS[hashlib.sha256(token.encode()).hexdigest()]={'expires':time.time()+100}
+        access.create_admin(self.token,'admin','long-test-password')
+        token='testsession';access.SESSIONS[hashlib.sha256(token.encode()).hexdigest()]={**access.admin_identity(),'expires':time.time()+100}
         ins.save_settings(ins.settings()|{'complete':True})
         with self.assertRaises(HTTPClientError):await websocket_connect(HTTPRequest(url,headers={'Cookie':'craftcore_session='+token,'Origin':'http://evil.invalid'}))
 

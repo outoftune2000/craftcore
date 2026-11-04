@@ -1,0 +1,89 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CraftCore · Player dashboard</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/style.css?v=18"><link rel="stylesheet" href="/arcade.css?v=15"><link rel="stylesheet" href="/pixel-meters.css?v=16"><link rel="stylesheet" href="/world-map.css?v=18"><link rel="stylesheet" href="/accounts.css?v=18"></head><body><div class="app-wrapper">
+<header class="navbar"><div class="brand"><div class="brand-badge">C</div><div class="brand-info"><h1>CraftCore</h1><span class="edition-pill">PLAYER DASHBOARD</span></div></div><div class="nav-center-status"><span class="status-pill" id="player-server-status">Connecting…</span><span class="player-badge" id="player-account-name">Player</span></div><div class="nav-right"><button class="account-button" onclick="craftLogout()">Sign out</button></div></header>
+<section class="page-heading"><div><span class="eyebrow" id="player-version">MINECRAFT JAVA</span><h2>Your world, in view.</h2><p>Explore the map and keep track of your player.</p></div><button class="map-ctrl-btn" id="player-refresh">Refresh</button></section>
+<p class="player-error" id="player-error" role="alert" hidden></p>
+<nav class="tab-nav"><button class="tab-item active" data-player-tab="tab-overview">Overview</button><button class="tab-item" data-player-tab="tab-map">Map</button><button class="tab-item" data-player-tab="tab-me">My player</button></nav>
+<main><div class="tab-pane active" id="tab-overview"><div class="metrics-dashboard-grid"><div class="glass-card metric-box"><div class="metric-head"><h4>Server CPU</h4></div><div class="metric-num" id="player-cpu">—</div><div class="progress-bar-wrap"><div class="progress-fill" id="bar-cpu" style="width:0%"></div></div></div><div class="glass-card metric-box"><div class="metric-head"><h4>Server memory</h4></div><div class="metric-num" id="player-memory">—</div><div class="progress-bar-wrap"><div class="progress-fill" id="bar-ram" style="width:0%"></div></div></div><div class="glass-card metric-box"><div class="metric-head"><h4>Uptime</h4></div><div class="metric-num" id="player-uptime">—</div></div><div class="glass-card metric-box"><div class="metric-head"><h4>Disk usage</h4></div><div class="metric-num" id="player-disk">—</div><div class="progress-bar-wrap"><div class="progress-fill" id="bar-disk" style="width:0%"></div></div></div></div><div class="player-overview-grid"><section class="glass-card"><h3>World</h3><p id="player-world-name">world</p><p id="player-world-size"></p><p id="player-address"></p></section><section class="glass-card"><h3>Online players · <span id="player-online-count">0</span></h3><p id="player-online-list"></p></section></div></div>
+      <div class="tab-pane" id="tab-map">
+        <div class="map-intro"><div><h3>World explorer</h3><p>Saved terrain, raised into view. Explore your builds from a new angle.</p></div><div class="terrain-navigation"><button class="map-ctrl-btn" onclick="toggleTerrainFullscreen()">Expand</button><button class="map-ctrl-btn" onclick="refreshTerrain()">Refresh</button></div></div>
+        <div class="map-layout-grid">
+
+          <!-- Map Canvas & Viewport Card -->
+          <div class="glass-card map-card">
+            <div class="terrain-toolbar">
+              <div class="terrain-dimensions" aria-label="Dimension">
+                <button class="map-dim-btn active" data-dim="overworld" onclick="setMapDimension('overworld')">Overworld</button>
+                <button class="map-dim-btn" data-dim="the_nether" onclick="setMapDimension('the_nether')">Nether</button>
+                <button class="map-dim-btn" data-dim="the_end" onclick="setMapDimension('the_end')">The End</button>
+              </div>
+              <div class="terrain-views" aria-label="Map projection">
+                <button class="map-view-btn" id="map-view-angled" aria-pressed="true" onclick="setTerrainMode('angled')">Angled</button>
+                <button class="map-view-btn" id="map-view-flat" aria-pressed="false" onclick="setTerrainMode('flat')">Top-down</button>
+              </div>
+            </div>
+            <div class="terrain-options">
+              <div class="terrain-height"><label for="map-layer-slider">Height cutoff</label><strong id="map-layer-display">Y ≤ 320</strong>
+                <input type="range" id="map-layer-slider" min="-64" max="320" value="320" step="1" oninput="handleMapLayerChange(this.value)">
+                <div class="layer-presets"><button class="btn-preset active" data-y="320" onclick="setMapLayerPreset(320)">Surface</button><button class="btn-preset" data-y="64" onclick="setMapLayerPreset(64)">64</button><button class="btn-preset" data-y="16" onclick="setMapLayerPreset(16)">16</button><button class="btn-preset" data-y="-32" onclick="setMapLayerPreset(-32)">−32</button></div>
+              </div>
+              <div class="terrain-navigation" aria-label="Map navigation">
+                <button class="map-ctrl-btn" onclick="zoomMap(1.3)" aria-label="Zoom in">+</button><button class="map-ctrl-btn" onclick="zoomMap(1/1.3)" aria-label="Zoom out">−</button>
+                <button class="map-ctrl-btn" onclick="rotateTerrain(-1)" aria-label="Rotate left">↶</button><button class="map-ctrl-btn" onclick="rotateTerrain(1)" aria-label="Rotate right">↷</button>
+                <button class="map-ctrl-btn" onclick="resetMapCenter()" title="Go to the saved world spawn">Spawn</button><button class="map-ctrl-btn map-fullscreen-exit" onclick="toggleTerrainFullscreen()">Exit full screen</button><button class="map-ctrl-btn" id="map-grid-toggle" aria-pressed="false" onclick="toggleMapGrid()">Grid</button>
+              </div>
+            </div>
+            <!-- Interactive Map Viewport -->
+            <div class="map-viewport-wrapper" id="map-viewport">
+              <canvas id="minecraft-map-canvas" class="minecraft-map-canvas" tabindex="0" aria-label="World terrain map. Drag or use arrow keys to pan. Scroll, pinch, or use plus and minus to zoom. Press zero to return to spawn."></canvas>
+              <span class="terrain-compass" id="map-orientation" aria-label="North direction">N ↗</span>
+
+              <!-- Floating Coords & Zoom Info HUD -->
+              <div class="map-coords-hud">
+                <span id="map-cursor-coords">Hover terrain for coordinates</span>
+                <span class="hud-sep">•</span>
+                <span id="map-zoom-level">1.20×</span>
+              </div>
+            </div>
+            <div class="terrain-footer"><span id="terrain-status" role="status">Open the map to load saved terrain</span><span id="map-saved-at">Saved world data</span></div>
+          </div>
+
+          <!-- Map Sidebar: Players & Waypoints -->
+          <div class="map-sidebar">
+
+            <!-- Tracked Players Card -->
+            <div class="glass-card map-side-card">
+              <div class="card-title-row">
+                <div>
+                  <h3>Tracked Players</h3>
+                  <p class="card-subtitle">Jump to the last saved position</p>
+                </div>
+                <span class="active-tag" id="map-players-count">0 Players</span>
+              </div>
+              <div class="map-player-list" id="map-player-list">
+                <div class="empty-msg">Loading player coordinates...</div>
+              </div>
+            </div>
+
+            <!-- Custom Waypoints Card -->
+            <div class="glass-card map-side-card">
+              <div class="card-title-row">
+                <div>
+                  <h3>Waypoints</h3>
+                  <p class="card-subtitle">Bases, portals & farms</p>
+                </div>
+
+              </div>
+              <div class="map-waypoints-list" id="map-waypoints-list">
+                <div class="empty-msg">No custom waypoints added yet.</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+        <p class="terrain-note">Drag to pan · Scroll or pinch to zoom · Arrow keys to move. Terrain and player positions reflect saved world data; checked every 15 seconds. Angled relief samples surface heights, rather than full block geometry.</p>
+      </div>
+
+
+<div class="tab-pane" id="tab-me"><div class="card-title-row"><div><h3 id="my-player-name">My player</h3><p class="card-subtitle" id="my-player-save">Loading your saved stats…</p></div><button class="map-ctrl-btn" id="my-map-jump">Find me on map</button></div><p class="player-meta" id="my-position"></p><div class="player-stats-grid"><div class="player-stat"><small>Health</small><strong id="my-health">—</strong></div><div class="player-stat"><small>Hunger</small><strong id="my-food">—</strong></div><div class="player-stat"><small>XP level</small><strong id="my-level">—</strong></div><div class="player-stat"><small>Score</small><strong id="my-score">—</strong></div></div><div class="player-inventory-layout"><section class="glass-card player-inventory-panel"><h3>Equipment & offhand</h3><div class="player-slots gear" id="player-gear-slots"></div><h3>Inventory</h3><div class="player-slots" id="player-main-slots"></div><h3>Hotbar</h3><div class="player-slots" id="player-hotbar-slots"></div></section><section class="glass-card player-inventory-panel"><h3>Ender chest</h3><div class="player-slots" id="player-ender-slots"></div><p class="card-subtitle">Select an item to inspect its name, count, and enchantments.</p><div class="player-item-detail" id="player-item-detail" role="status">Select an inventory slot.</div></section></div></div></main><footer class="app-footer"><span>CRAFTCORE / PLAYER ACCESS</span><span>Read-only · Inventory and stats reflect saved world data</span></footer></div>
+<script src="/session.js"></script><script src="/player.js?v=18"></script><script src="/pixel-meters.js?v=16"></script><script src="/world-map.js?v=18"></script></body></html>
